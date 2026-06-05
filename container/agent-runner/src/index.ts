@@ -32,10 +32,11 @@ interface ContainerInput {
 }
 
 interface ContainerOutput {
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'progress';
   result: string | null;
   newSessionId?: string;
   error?: string;
+  toolName?: string;
 }
 
 interface SessionEntry {
@@ -108,6 +109,21 @@ async function readStdin(): Promise<string> {
 
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+
+function getToolLabel(toolName: string, input: Record<string, unknown>): string {
+  if (toolName === 'Bash') {
+    const cmd = typeof input?.command === 'string' ? input.command.trim() : '';
+    if (cmd.startsWith('agent-browser')) return 'browsing web';
+    return 'running command';
+  }
+  if (toolName === 'WebFetch') return 'fetching URL';
+  if (toolName === 'WebSearch') return 'searching web';
+  if (toolName === 'Read' || toolName === 'Glob' || toolName === 'Grep') return 'reading files';
+  if (toolName === 'Write' || toolName === 'Edit') return 'writing files';
+  if (toolName === 'Task') return 'running task';
+  if (toolName.startsWith('mcp__nanoclaw__')) return '';
+  return toolName.toLowerCase();
+}
 
 function writeOutput(output: ContainerOutput): void {
   console.log(OUTPUT_START_MARKER);
@@ -435,8 +451,18 @@ async function runQuery(
     const msgType = message.type === 'system' ? `system/${(message as { subtype?: string }).subtype}` : message.type;
     log(`[msg #${messageCount}] type=${msgType}`);
 
-    if (message.type === 'assistant' && 'uuid' in message) {
-      lastAssistantUuid = (message as { uuid: string }).uuid;
+    if (message.type === 'assistant') {
+      if ('uuid' in message) lastAssistantUuid = (message as { uuid: string }).uuid;
+      const content = (message as { message?: { content?: unknown[] } }).message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          const b = block as { type?: string; name?: string; input?: Record<string, unknown> };
+          if (b.type === 'tool_use' && b.name) {
+            const label = getToolLabel(b.name, b.input || {});
+            if (label) writeOutput({ status: 'progress', result: null, toolName: label });
+          }
+        }
+      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {

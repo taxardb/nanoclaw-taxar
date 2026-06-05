@@ -254,7 +254,35 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }, IDLE_TIMEOUT);
   };
 
+  logger.debug({ chatJid }, 'Sending thinking message');
+  const thinkingMessageId = await (channel.sendMessageWithId
+    ? channel.sendMessageWithId(chatJid, '<i>Thinking...</i>')
+    : channel.sendMessage(chatJid, '<i>Thinking...</i>').then(() => undefined));
+  logger.debug({ chatJid, thinkingMessageId: thinkingMessageId ?? 'none' }, 'Thinking message result');
   await channel.setTyping?.(chatJid, true);
+
+  // Animate "Thinking..." by appending a dot every 5 seconds (up to 20 extra dots)
+  // Also shows current tool label when available, e.g. "Thinking.... (browsing web)"
+  let thinkingDots = 3;
+  let thinkingLabel = '';
+  const buildThinkingText = () => {
+    const dots = '.'.repeat(thinkingDots);
+    return thinkingLabel
+      ? `<i>Thinking${dots} (${thinkingLabel})</i>`
+      : `<i>Thinking${dots}</i>`;
+  };
+  const thinkingInterval =
+    thinkingMessageId && channel.editMessage
+      ? setInterval(() => {
+          if (thinkingDots >= 23) {
+            clearInterval(thinkingInterval!);
+            return;
+          }
+          thinkingDots++;
+          channel.editMessage!(chatJid, thinkingMessageId, buildThinkingText()).catch(() => {});
+        }, 5000)
+      : null;
+
   let hadError = false;
   let outputSentToUser = false;
 
@@ -269,11 +297,23 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.length} chars`);
       if (text) {
-        await channel.sendMessage(chatJid, text);
+        if (thinkingInterval) clearInterval(thinkingInterval);
+        if (!outputSentToUser && thinkingMessageId && channel.editMessage) {
+          await channel.editMessage(chatJid, thinkingMessageId, text);
+        } else {
+          await channel.sendMessage(chatJid, text);
+        }
         outputSentToUser = true;
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
+    }
+
+    if (result.status === 'progress' && result.toolName && !outputSentToUser) {
+      thinkingLabel = result.toolName;
+      if (thinkingMessageId && channel.editMessage) {
+        channel.editMessage(chatJid, thinkingMessageId, buildThinkingText()).catch(() => {});
+      }
     }
 
     if (result.status === 'success') {
@@ -285,6 +325,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
   });
 
+  if (thinkingInterval) clearInterval(thinkingInterval);
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
@@ -611,6 +652,23 @@ async function main(): Promise<void> {
           return;
         }
       }
+      // Auto-register new Telegram private chats (positive chat IDs)
+      if (!registeredGroups[chatJid] && chatJid.startsWith('tg:')) {
+        const tgId = chatJid.slice(3);
+        if (!tgId.startsWith('-')) {
+          const folder = `tg_${tgId}`;
+          const name = msg.sender_name || tgId;
+          registerGroup(chatJid, {
+            name,
+            folder,
+            trigger: '@Andy',
+            requiresTrigger: false,
+            added_at: new Date().toISOString(),
+          });
+          logger.info({ chatJid, name, folder }, 'Auto-registered Telegram private chat');
+        }
+      }
+
       storeMessage(msg);
     },
     onChatMetadata: (

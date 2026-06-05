@@ -19,9 +19,32 @@ export interface TelegramChannelOpts {
 }
 
 /**
- * Send a message with Telegram Markdown parse mode, falling back to plain text.
- * Claude's output naturally matches Telegram's Markdown v1 format:
- *   *bold*, _italic_, `code`, ```code blocks```, [links](url)
+ * Convert Markdown formatting to Telegram HTML.
+ * Handles both Markdown (from agents that ignore instructions) and passthrough HTML.
+ */
+function markdownToHtml(text: string): string {
+  return text
+    // Escape existing HTML special chars that aren't our tags
+    // (do this before adding our own tags)
+    .replace(/&(?!amp;|lt;|gt;|quot;)/g, '&amp;')
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+    .replace(/__(.+?)__/gs, '<b>$1</b>')
+    // Italic: *text* or _text_ (only when surrounded by non-word or start/end)
+    .replace(/(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)/gs, '<i>$1</i>')
+    .replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/gs, '<i>$1</i>')
+    // Inline code: `text`
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    // Strip markdown links [text](url) → text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Strip heading markers
+    .replace(/^#{1,6}\s+/gm, '')
+    // Strip horizontal rules
+    .replace(/^---+$/gm, '');
+}
+
+/**
+ * Send a message using Telegram HTML parse mode, falling back to plain text.
  */
 async function sendTelegramMessage(
   api: { sendMessage: Api['sendMessage'] },
@@ -29,14 +52,15 @@ async function sendTelegramMessage(
   text: string,
   options: { message_thread_id?: number } = {},
 ): Promise<void> {
+  const html = markdownToHtml(text);
   try {
-    await api.sendMessage(chatId, text, {
+    await api.sendMessage(chatId, html, {
       ...options,
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
     });
   } catch (err) {
-    // Fallback: send as plain text if Markdown parsing fails
-    logger.debug({ err }, 'Markdown send failed, falling back to plain text');
+    // Fallback: send as plain text if HTML parsing fails
+    logger.debug({ err }, 'HTML send failed, falling back to plain text');
     await api.sendMessage(chatId, text, options);
   }
 }
@@ -71,7 +95,7 @@ export class TelegramChannel implements Channel {
 
       ctx.reply(
         `Chat ID: \`tg:${chatId}\`\nName: ${chatName}\nType: ${chatType}`,
-        { parse_mode: 'Markdown' },
+        { parse_mode: 'HTML' },
       );
     });
 
@@ -139,15 +163,7 @@ export class TelegramChannel implements Channel {
         isGroup,
       );
 
-      // Only deliver full message for registered groups
-      const group = this.opts.registeredGroups()[chatJid];
-      if (!group) {
-        logger.debug(
-          { chatJid, chatName },
-          'Message from unregistered Telegram chat',
-        );
-        return;
-      }
+      // Deliver message to onMessage (auto-registration handled there)
 
       // Deliver message — startMessageLoop() will pick it up
       this.opts.onMessage(chatJid, {
@@ -275,6 +291,50 @@ export class TelegramChannel implements Channel {
       );
     } catch (err) {
       logger.error({ jid, err }, 'Failed to send Telegram message');
+    }
+  }
+
+  async sendMessageWithId(jid: string, text: string): Promise<string | undefined> {
+    if (!this.bot) return undefined;
+    const numericId = jid.replace(/^tg:/, '');
+    const html = markdownToHtml(text);
+    try {
+      const result = await this.bot.api.sendMessage(numericId, html, {
+        parse_mode: 'HTML',
+      });
+      logger.debug({ jid, messageId: result.message_id }, 'sendMessageWithId success');
+      return result.message_id.toString();
+    } catch (err1) {
+      logger.debug({ jid, err: err1 }, 'sendMessageWithId HTML failed, retrying plain');
+      try {
+        const result = await this.bot.api.sendMessage(numericId, text);
+        logger.debug({ jid, messageId: result.message_id }, 'sendMessageWithId plain success');
+        return result.message_id.toString();
+      } catch (err2) {
+        logger.error({ jid, err: err2 }, 'sendMessageWithId failed');
+        return undefined;
+      }
+    }
+  }
+
+  async editMessage(jid: string, messageId: string, text: string): Promise<void> {
+    if (!this.bot) return;
+    const numericId = jid.replace(/^tg:/, '');
+    const MAX_LENGTH = 4096;
+    const html = markdownToHtml(text);
+    try {
+      await this.bot.api.editMessageText(numericId, parseInt(messageId, 10), html.slice(0, MAX_LENGTH), {
+        parse_mode: 'HTML',
+      });
+      if (text.length > MAX_LENGTH) {
+        for (let i = MAX_LENGTH; i < text.length; i += MAX_LENGTH) {
+          await sendTelegramMessage(this.bot.api, numericId, text.slice(i, i + MAX_LENGTH));
+        }
+      }
+      logger.info({ jid, messageId }, 'Telegram message edited');
+    } catch (err) {
+      logger.debug({ jid, err }, 'Edit failed, sending as new message');
+      await this.sendMessage(jid, text);
     }
   }
 

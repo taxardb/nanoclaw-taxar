@@ -46,10 +46,11 @@ export interface ContainerInput {
 }
 
 export interface ContainerOutput {
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'progress';
   result: string | null;
   newSessionId?: string;
   error?: string;
+  toolName?: string;
 }
 
 interface VolumeMount {
@@ -140,6 +141,9 @@ function buildVolumeMounts(
             // Enable Claude's memory feature (persists user preferences between sessions)
             // https://code.claude.com/docs/en/memory#manage-auto-memory
             CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+          },
+          permissions: {
+            allow: ['Bash(agent-browser:*)'],
           },
         },
         null,

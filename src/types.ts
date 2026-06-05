@@ -51,6 +51,7 @@ export interface NewMessage {
   timestamp: string;
   is_from_me?: boolean;
   is_bot_message?: boolean;
+  thread_id?: string;
 }
 
 export interface ScheduledTask {
@@ -89,6 +90,10 @@ export interface Channel {
   disconnect(): Promise<void>;
   // Optional: typing indicator. Channels that support it implement it.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
+  // Optional: send a message and return its ID (for later editing).
+  sendMessageWithId?(jid: string, text: string): Promise<string | undefined>;
+  // Optional: edit a previously sent message by ID.
+  editMessage?(jid: string, messageId: string, text: string): Promise<void>;
   // Optional: sync group/chat names from the platform.
   syncGroups?(force: boolean): Promise<void>;
 }
