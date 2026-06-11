@@ -53,7 +53,10 @@ curl 'https://picks.taxar.eu/sections/api/ai-rec/?action=get-recommendation'
 
 ${tickerOverride}
 
-Follow the instructions in the API response exactly — including all research requirements, the rating framework, and the output JSON format. POST your recommendation to the endpoint specified in the instructions.
+Follow the instructions in the API response exactly — including all research requirements, the rating framework, and the output JSON format.
+
+Once you have your recommendation JSON, POST it to:
+curl -X POST 'https://picks.taxar.eu/sections/api/ai-rec/?action=save-recommendation' -H 'Content-Type: application/json' -d '<your JSON>'
 
 Verify the POST returned {"status":"success"} before finishing.
 Return: "[TICKER] → [RATING] ([CONFIDENCE]%) — [one sentence reason]"`;
