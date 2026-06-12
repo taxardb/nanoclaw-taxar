@@ -29,6 +29,8 @@ interface ContainerInput {
   isScheduledTask?: boolean;
   assistantName?: string;
   script?: string;
+  model?: string;
+  maxTurns?: number;
 }
 
 interface ContainerOutput {
@@ -414,6 +416,8 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
+      model: containerInput.model,
+      maxTurns: containerInput.maxTurns,
       systemPrompt: globalClaudeMd
         ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
         : undefined,

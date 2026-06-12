@@ -67,17 +67,20 @@ const db = new Database(DB_PATH);
 const now = new Date();
 let created = 0;
 
+const containerConfig = JSON.stringify({ maxTurns: 35 });
+
 for (let i = 0; i < count; i++) {
   db.prepare(`
     INSERT INTO scheduled_tasks
-      (id, group_folder, chat_jid, prompt, script, schedule_type, schedule_value,
+      (id, group_folder, chat_jid, prompt, script, container_config, schedule_type, schedule_value,
        context_mode, next_run, status, created_at)
-    VALUES (?, ?, ?, ?, NULL, 'once', '0', 'isolated', ?, 'active', ?)
+    VALUES (?, ?, ?, ?, NULL, ?, 'once', '0', 'isolated', ?, 'active', ?)
   `).run(
     randomUUID(),
     groupFolder,
     chatJid,
     buildPrompt(forcedTicker ?? undefined),
+    containerConfig,
     now.toISOString(),
     now.toISOString(),
   );

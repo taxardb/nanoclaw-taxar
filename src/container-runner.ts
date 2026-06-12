@@ -43,6 +43,8 @@ export interface ContainerInput {
   isScheduledTask?: boolean;
   assistantName?: string;
   script?: string;
+  model?: string;
+  maxTurns?: number;
 }
 
 export interface ContainerOutput {

@@ -170,6 +170,13 @@ async function runTask(
   };
 
   try {
+    const taskContainerConfig = task.container_config
+      ? (JSON.parse(task.container_config) as {
+          model?: string;
+          maxTurns?: number;
+        })
+      : {};
+
     const output = await runContainerAgent(
       group,
       {
@@ -181,9 +188,11 @@ async function runTask(
         isScheduledTask: true,
         assistantName: ASSISTANT_NAME,
         script: task.script || undefined,
+        model: taskContainerConfig.model,
+        maxTurns: taskContainerConfig.maxTurns,
       },
       (proc, containerName) =>
-        deps.onProcess(task.chat_jid, proc, containerName, task.group_folder),
+        deps.onProcess(task.id, proc, containerName, task.group_folder),
       async (streamedOutput: ContainerOutput) => {
         if (streamedOutput.result) {
           result = streamedOutput.result;
@@ -264,7 +273,7 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
           continue;
         }
 
-        deps.queue.enqueueTask(currentTask.chat_jid, currentTask.id, () =>
+        deps.queue.enqueueTask(currentTask.id, currentTask.id, () =>
           runTask(currentTask, deps),
         );
       }
