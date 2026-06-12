@@ -258,7 +258,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const thinkingMessageId = await (channel.sendMessageWithId
     ? channel.sendMessageWithId(chatJid, '<i>Thinking...</i>')
     : channel.sendMessage(chatJid, '<i>Thinking...</i>').then(() => undefined));
-  logger.debug({ chatJid, thinkingMessageId: thinkingMessageId ?? 'none' }, 'Thinking message result');
+  logger.debug(
+    { chatJid, thinkingMessageId: thinkingMessageId ?? 'none' },
+    'Thinking message result',
+  );
   await channel.setTyping?.(chatJid, true);
 
   // Animate "Thinking..." by appending a dot every 5 seconds (up to 20 extra dots)
@@ -279,7 +282,11 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
             return;
           }
           thinkingDots++;
-          channel.editMessage!(chatJid, thinkingMessageId, buildThinkingText()).catch(() => {});
+          channel.editMessage!(
+            chatJid,
+            thinkingMessageId,
+            buildThinkingText(),
+          ).catch(() => {});
         }, 5000)
       : null;
 
@@ -312,7 +319,9 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (result.status === 'progress' && result.toolName && !outputSentToUser) {
       thinkingLabel = result.toolName;
       if (thinkingMessageId && channel.editMessage) {
-        channel.editMessage(chatJid, thinkingMessageId, buildThinkingText()).catch(() => {});
+        channel
+          .editMessage(chatJid, thinkingMessageId, buildThinkingText())
+          .catch(() => {});
       }
     }
 
@@ -665,7 +674,10 @@ async function main(): Promise<void> {
             requiresTrigger: false,
             added_at: new Date().toISOString(),
           });
-          logger.info({ chatJid, name, folder }, 'Auto-registered Telegram private chat');
+          logger.info(
+            { chatJid, name, folder },
+            'Auto-registered Telegram private chat',
+          );
         }
       }
 

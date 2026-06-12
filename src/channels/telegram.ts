@@ -23,24 +23,26 @@ export interface TelegramChannelOpts {
  * Handles both Markdown (from agents that ignore instructions) and passthrough HTML.
  */
 function markdownToHtml(text: string): string {
-  return text
-    // Escape existing HTML special chars that aren't our tags
-    // (do this before adding our own tags)
-    .replace(/&(?!amp;|lt;|gt;|quot;)/g, '&amp;')
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
-    .replace(/__(.+?)__/gs, '<b>$1</b>')
-    // Italic: *text* or _text_ (only when surrounded by non-word or start/end)
-    .replace(/(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)/gs, '<i>$1</i>')
-    .replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/gs, '<i>$1</i>')
-    // Inline code: `text`
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    // Strip markdown links [text](url) → text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // Strip heading markers
-    .replace(/^#{1,6}\s+/gm, '')
-    // Strip horizontal rules
-    .replace(/^---+$/gm, '');
+  return (
+    text
+      // Escape existing HTML special chars that aren't our tags
+      // (do this before adding our own tags)
+      .replace(/&(?!amp;|lt;|gt;|quot;)/g, '&amp;')
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+      .replace(/__(.+?)__/gs, '<b>$1</b>')
+      // Italic: *text* or _text_ (only when surrounded by non-word or start/end)
+      .replace(/(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)/gs, '<i>$1</i>')
+      .replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/gs, '<i>$1</i>')
+      // Inline code: `text`
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      // Strip markdown links [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Strip heading markers
+      .replace(/^#{1,6}\s+/gm, '')
+      // Strip horizontal rules
+      .replace(/^---+$/gm, '')
+  );
 }
 
 /**
@@ -294,7 +296,10 @@ export class TelegramChannel implements Channel {
     }
   }
 
-  async sendMessageWithId(jid: string, text: string): Promise<string | undefined> {
+  async sendMessageWithId(
+    jid: string,
+    text: string,
+  ): Promise<string | undefined> {
     if (!this.bot) return undefined;
     const numericId = jid.replace(/^tg:/, '');
     const html = markdownToHtml(text);
@@ -302,13 +307,22 @@ export class TelegramChannel implements Channel {
       const result = await this.bot.api.sendMessage(numericId, html, {
         parse_mode: 'HTML',
       });
-      logger.debug({ jid, messageId: result.message_id }, 'sendMessageWithId success');
+      logger.debug(
+        { jid, messageId: result.message_id },
+        'sendMessageWithId success',
+      );
       return result.message_id.toString();
     } catch (err1) {
-      logger.debug({ jid, err: err1 }, 'sendMessageWithId HTML failed, retrying plain');
+      logger.debug(
+        { jid, err: err1 },
+        'sendMessageWithId HTML failed, retrying plain',
+      );
       try {
         const result = await this.bot.api.sendMessage(numericId, text);
-        logger.debug({ jid, messageId: result.message_id }, 'sendMessageWithId plain success');
+        logger.debug(
+          { jid, messageId: result.message_id },
+          'sendMessageWithId plain success',
+        );
         return result.message_id.toString();
       } catch (err2) {
         logger.error({ jid, err: err2 }, 'sendMessageWithId failed');
@@ -317,18 +331,31 @@ export class TelegramChannel implements Channel {
     }
   }
 
-  async editMessage(jid: string, messageId: string, text: string): Promise<void> {
+  async editMessage(
+    jid: string,
+    messageId: string,
+    text: string,
+  ): Promise<void> {
     if (!this.bot) return;
     const numericId = jid.replace(/^tg:/, '');
     const MAX_LENGTH = 4096;
     const html = markdownToHtml(text);
     try {
-      await this.bot.api.editMessageText(numericId, parseInt(messageId, 10), html.slice(0, MAX_LENGTH), {
-        parse_mode: 'HTML',
-      });
+      await this.bot.api.editMessageText(
+        numericId,
+        parseInt(messageId, 10),
+        html.slice(0, MAX_LENGTH),
+        {
+          parse_mode: 'HTML',
+        },
+      );
       if (text.length > MAX_LENGTH) {
         for (let i = MAX_LENGTH; i < text.length; i += MAX_LENGTH) {
-          await sendTelegramMessage(this.bot.api, numericId, text.slice(i, i + MAX_LENGTH));
+          await sendTelegramMessage(
+            this.bot.api,
+            numericId,
+            text.slice(i, i + MAX_LENGTH),
+          );
         }
       }
       logger.info({ jid, messageId }, 'Telegram message edited');
