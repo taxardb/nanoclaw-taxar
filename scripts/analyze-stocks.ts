@@ -59,7 +59,8 @@ Once you have your recommendation JSON, POST it to:
 curl -X POST 'https://picks.taxar.eu/sections/api/ai-rec/?action=save-recommendation' -H 'Content-Type: application/json' -d '<your JSON>'
 
 Verify the POST returned {"status":"success"} before finishing.
-Return: "[TICKER] → [RATING] ([CONFIDENCE]%) — [one sentence reason]"`;
+Your final reply must contain ONLY this line, nothing else:
+[TICKER] → [RATING] ([CONFIDENCE]%) — [one sentence reason]`;
 }
 
 const db = new Database(DB_PATH);
